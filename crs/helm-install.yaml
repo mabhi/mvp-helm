@@ -1,0 +1,10 @@
+apiVersion: mabhi.dev/v1
+kind: HelmAction
+metadata:
+  name: helm-install
+actionName: my-mysql
+spec:
+  chartVersion: "9.9.1"
+  chartName: "bitnami/mysql"
+  repoUrl: "https://charts.bitnami.com/bitnami"
+  repoName: "bitnami"
