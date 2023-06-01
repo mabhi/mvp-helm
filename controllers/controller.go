@@ -32,18 +32,20 @@ type HelmController struct {
 	informer  cache.SharedIndexInformer
 	queue     workqueue.RateLimitingInterface
 	clientset kubernetes.Interface
-	hclient   *helmclient.HelmClient
+	hclient   helmclient.IHelmClient
+	releases  map[string]models.HelmAction
 }
 
 const TargetNamespace = "helm-store"
 
-func NewController(dynamic dynamic.Interface, informer cache.SharedIndexInformer, clientset kubernetes.Interface, hclient *helmclient.HelmClient) *HelmController {
+func NewController(dynamic dynamic.Interface, informer cache.SharedIndexInformer, clientset kubernetes.Interface, hclient helmclient.IHelmClient) *HelmController {
 	c := &HelmController{
 		dynamic:   dynamic,
 		informer:  informer,
 		queue:     workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 		clientset: clientset,
 		hclient:   hclient,
+		releases:  make(map[string]models.HelmAction),
 	}
 
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -108,17 +110,17 @@ func (hc *HelmController) processItem(key string) error {
 	}
 
 	if !exists {
-		hc.handleHelmDeleteAction(obj)
+		hc.handleHelmDeleteAction(key)
 		return nil
 	}
 
-	hc.handleHelmInstallAction(obj)
+	hc.handleHelmInstallAction(key, obj)
 	return nil
 }
 
 // handlers
 func (c *HelmController) deleteHandler(obj interface{}) {
-	fmt.Println("handle delete")
+	fmt.Println("--------------")
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err == nil {
 		fmt.Println("queued delete request")
@@ -130,6 +132,7 @@ func (c *HelmController) deleteHandler(obj interface{}) {
 }
 
 func (c *HelmController) addHandler(obj interface{}) {
+	fmt.Println("--------------")
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err == nil {
 		fmt.Println("queued add request")
@@ -183,13 +186,9 @@ func (c *HelmController) handleHelmUpdateAction(oldObj interface{}, newObj inter
 
 }
 
-func (c *HelmController) handleHelmDeleteAction(obj interface{}) error {
-	crObjWrapper := obj.(*unstructured.Unstructured)
+func (c *HelmController) handleHelmDeleteAction(key string) error {
+	var helmEntity, _ = c.releases[key]
 
-	jsonObj := crObjWrapper.Object
-	var helmEntity models.HelmAction
-
-	utility.Deserialize(jsonObj, &helmEntity)
 	err := c.hclient.DeleteApp(helmEntity)
 	if err != nil {
 		return fmt.Errorf("delete error %v", err.Error())
@@ -199,7 +198,7 @@ func (c *HelmController) handleHelmDeleteAction(obj interface{}) error {
 	return nil
 }
 
-func (c *HelmController) handleHelmInstallAction(obj interface{}) error {
+func (c *HelmController) handleHelmInstallAction(key string, obj interface{}) error {
 
 	crObjWrapper := obj.(*unstructured.Unstructured)
 
@@ -213,6 +212,7 @@ func (c *HelmController) handleHelmInstallAction(obj interface{}) error {
 	} else {
 		fmt.Println("Release success ")
 		fmt.Printf("Name: %s, Status: %v Release No. %d\n", res.Name, res.Info.Status, res.Version)
+		c.releases[key] = helmEntity
 	}
 	return nil
 }

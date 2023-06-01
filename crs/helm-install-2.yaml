@@ -1,0 +1,10 @@
+apiVersion: mabhi.dev/v1
+kind: HelmAction
+metadata:
+  name: helm-install-2
+actionName: my-redis
+spec:
+  chartVersion: "17.11.3"
+  chartName: "bitnami/redis"
+  repoUrl: "https://charts.bitnami.com/bitnami"
+  repoName: "bitnami"
